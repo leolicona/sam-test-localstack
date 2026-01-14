@@ -2,57 +2,62 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   sam-test-localstack
+  
+  Image Analysis Architecture with LocalStack
 
-  Sample SAM Template for sam-test-localstack
-
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-
-    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    Timeout: 20
+    MemorySize: 512
     LoggingConfig:
       LogFormat: JSON
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref AnalysisResultsTable
+        GEMINI_API_KEY: "simulated-key" # Placeholder por ahora
+
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # 1. Tabla DynamoDB para guardar resultados
+  AnalysisResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ImageAnalysisResults
+      AttributeDefinitions:
+        - AttributeName: imageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: imageId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # 2. Función Lambda de Procesamiento
+  ImageAnalysisFunction:
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: hello_world/
       Handler: app.lambda_handler
       Runtime: python3.12
       Architectures:
-      - x86_64
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AnalysisResultsTable
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        AnalyzeImage:
+          Type: Api
           Properties:
-            Path: /hello
-            Method: get
+            Path: /analyze
+            Method: post
+            # Configuración para permitir binarios (si se requiriera explícitamente en APIGW REST)
+            # En SAM + Lambda Proxy, el body llega en base64 si es binario.
 
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World 
-      function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  AnalyzeApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/analyze"
+  FunctionArn:
+    Description: "Image Analysis Lambda Function ARN"
+    Value: !GetAtt ImageAnalysisFunction.Arn
+  TableName:
+    Description: "DynamoDB Table Name"
+    Value: !Ref AnalysisResultsTable
