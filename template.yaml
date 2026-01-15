@@ -14,7 +14,13 @@ Globals:
     Environment:
       Variables:
         TABLE_NAME: !Ref AnalysisResultsTable
-        GEMINI_API_KEY: "simulated-key" # Placeholder por ahora
+        GEMINI_API_KEY: !Ref GeminiApiKey
+
+Parameters:
+  GeminiApiKey:
+    Type: String
+    Description: "API Key for Google Gemini AI Service"
+    NoEcho: true
 
 Resources:
   # 1. Tabla DynamoDB para guardar resultados
