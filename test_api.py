@@ -37,7 +37,20 @@ def test_analyze_image():
         
         if response.status_code == 200:
             print("\n✅ ¡Éxito! Respuesta del servidor:")
-            print(json.dumps(response.json(), indent=2))
+            data = response.json()
+            analysis = data.get('analysis', {})
+            
+            print(json.dumps(data, indent=2))
+            
+            if 'store_name' in analysis:
+                print("\n--- 🧾 Información del Ticket ---")
+                print(f"Tienda: {analysis.get('store_name')} ({analysis.get('store_address')})")
+                print(f"Fecha: {analysis.get('date')} {analysis.get('time')}")
+                print(f"Total: {analysis.get('total_amount')} {analysis.get('currency')}")
+                print("\nItems:")
+                for item in analysis.get('items', []):
+                    print(f" - {item.get('quantity')}x {item.get('description')}: ${item.get('total_price')} ({item.get('category')})")
+            
         else:
             print(f"\n❌ Error del servidor:")
             print(response.text)

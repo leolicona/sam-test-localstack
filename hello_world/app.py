@@ -62,6 +62,31 @@ def lambda_handler(event, context):
         analysis_result = {}
         if client and image_data:
             try:
+                # Definir el esquema deseado para el análisis de tickets
+                prompt = """
+                Analyze this receipt image and extract the following information in JSON format:
+                {
+                    "store_name": "Name of the store",
+                    "store_address": "Address or location of the store",
+                    "date": "Date of purchase in YYYY-MM-DD format",
+                    "time": "Time of purchase in HH:MM format",
+                    "total_amount": "Total amount paid (number)",
+                    "currency": "Currency code (e.g., MXN, USD)",
+                    "items": [
+                        {
+                            "description": "Product description",
+                            "quantity": "Quantity (number)",
+                            "unit_price": "Unit price (number)",
+                            "total_price": "Total price for this item (number)",
+                            "category": "Inferred category (e.g., Grocery, Clothing, Electronics)"
+                        }
+                    ],
+                    "payment_method": "Payment method (e.g., Cash, Credit Card)",
+                    "summary": "Brief summary of the purchase"
+                }
+                If any field is missing or unclear, use null.
+                """
+
                 response = client.models.generate_content(
                     model='gemini-2.0-flash',
                     contents=[
@@ -69,7 +94,7 @@ def lambda_handler(event, context):
                             data=image_data,
                             mime_type='image/jpeg',
                         ),
-                        'Describe this image in detail. Return a JSON with "summary" (string), "tags" (list of strings), and "confidence" (number between 0 and 1).'
+                        prompt
                     ],
                     config=types.GenerateContentConfig(
                         response_mime_type='application/json'
@@ -79,23 +104,27 @@ def lambda_handler(event, context):
                 print(f"Respuesta Raw de Gemini: {response.text}")
                 parsed_response = json.loads(response.text)
                 
-                analysis_result = {
-                    "summary": parsed_response.get('summary', 'No summary available'),
-                    "tags": parsed_response.get('tags', []),
-                    "confidence": Decimal(str(parsed_response.get('confidence', 0.99)))
-                }
+                # Convertir floats a Decimal para DynamoDB
+                def float_to_decimal(obj):
+                    if isinstance(obj, float):
+                        return Decimal(str(obj))
+                    if isinstance(obj, dict):
+                        return {k: float_to_decimal(v) for k, v in obj.items()}
+                    if isinstance(obj, list):
+                        return [float_to_decimal(v) for v in obj]
+                    return obj
+
+                analysis_result = float_to_decimal(parsed_response)
 
             except Exception as e:
                 print(f"Error llamando a Gemini: {str(e)}")
                 analysis_result = {
                     "error": str(e),
                     "summary": "Error analizando imagen",
-                    "confidence": Decimal('0')
                 }
         else:
              analysis_result = {
                 "summary": "Modo Simulado (No API Key found)",
-                "confidence": Decimal('0.0')
             }
 
         # 3. Guardar en DynamoDB
@@ -114,9 +143,16 @@ def lambda_handler(event, context):
             print(f"Item guardado en DynamoDB: {item_id}")
 
         # 4. Retornar respuesta
-        response_analysis = analysis_result.copy()
-        if 'confidence' in response_analysis:
-            response_analysis['confidence'] = float(response_analysis['confidence'])
+        def decimal_to_float(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            if isinstance(obj, dict):
+                return {k: decimal_to_float(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [decimal_to_float(v) for v in obj]
+            return obj
+
+        response_analysis = decimal_to_float(analysis_result)
 
         return {
             "statusCode": 200,
