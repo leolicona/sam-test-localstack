@@ -13,8 +13,36 @@ dynamodb = boto3.resource('dynamodb')
 table_name = os.environ.get('TABLE_NAME')
 table = dynamodb.Table(table_name) if table_name else None
 
+def get_gemini_api_key():
+    secret_name = "GeminiApiKey"
+    
+    # Configuración para LocalStack
+    # En el entorno Lambda de LocalStack, LOCALSTACK_HOSTNAME suele estar disponible
+    endpoint_url = None
+    if os.environ.get('LOCALSTACK_HOSTNAME'):
+        endpoint_url = f"http://{os.environ['LOCALSTACK_HOSTNAME']}:4566"
+    
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        endpoint_url=endpoint_url
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except Exception as e:
+        print(f"Error retrieving secret: {e}")
+        return None
+
+    if 'SecretString' in get_secret_value_response:
+        secret = get_secret_value_response['SecretString']
+        return json.loads(secret).get('GeminiApiKey')
+    return None
+
 # Inicializar cliente de Gemini
-gemini_api_key = os.environ.get('GEMINI_API_KEY')
+gemini_api_key = get_gemini_api_key()
 client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def lambda_handler(event, context):

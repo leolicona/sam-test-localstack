@@ -6,7 +6,7 @@ import json
 
 # Configuración
 # Nota: La URL puede cambiar si recreamos el stack. Asegúrate de actualizarla.
-API_URL = "https://d3lxglaakj.execute-api.localhost.localstack.cloud:4566/Prod/analyze" 
+API_URL = "https://sfpintl7bu.execute-api.localhost.localstack.cloud:4566/Prod/analyze" 
 IMAGE_PATH = "test_image.jpg"
 
 def test_analyze_image():
